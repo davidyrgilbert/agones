@@ -225,11 +225,13 @@ namespace Agones
         /// <param name="callback">This callback is executed whenever a GameServer configuration change occurs</param>
         public void WatchGameServer(WatchGameServerCallback callback)
         {
-            var req = new UnityWebRequest(sidecarAddress + "/watch/gameserver", UnityWebRequest.kHttpVerbGET);
-            req.downloadHandler = new GameServerHandler(callback);
-            req.SetRequestHeader("Content-Type", "application/json");
-            req.SendWebRequest();
-            Log("Agones Watch Started");
+            using (var req = new UnityWebRequest(sidecarAddress + "/watch/gameserver", UnityWebRequest.kHttpVerbGET))
+            {
+                req.downloadHandler = new GameServerHandler(callback);
+                req.SetRequestHeader("Content-Type", "application/json");
+                req.SendWebRequest();
+                Log("Agones Watch Started");
+            }
         }
         #endregion
 
@@ -267,32 +269,32 @@ namespace Agones
             // To prevent that an async method leaks after destroying this gameObject.
             cancellationTokenSource.Token.ThrowIfCancellationRequested();
 
-            var req = new UnityWebRequest(sidecarAddress + api, method)
+            using (var req = new UnityWebRequest(sidecarAddress + api, method)
+                   {
+                       uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json)),
+                       downloadHandler = new DownloadHandlerBuffer()
+                   })
             {
-                uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json)),
-                downloadHandler = new DownloadHandlerBuffer()
-            };
-            req.SetRequestHeader("Content-Type", "application/json");
+                req.SetRequestHeader("Content-Type", "application/json");
 
-            await new AgonesAsyncOperationWrapper(req.SendWebRequest());
+                await new AgonesAsyncOperationWrapper(req.SendWebRequest());
 
-            var result = new AsyncResult();
+                var result = new AsyncResult();
 
-            result.ok = req.responseCode == (long) HttpStatusCode.OK;
+                result.ok = req.responseCode == (long)HttpStatusCode.OK;
 
-            if (result.ok)
-            {
-                result.json = req.downloadHandler.text;
-                Log($"Agones SendRequest ok: {api} {req.downloadHandler.text}");
+                if (result.ok)
+                {
+                    result.json = req.downloadHandler.text;
+                    Log($"Agones SendRequest ok: {api} {req.downloadHandler.text}");
+                }
+                else
+                {
+                    Log($"Agones SendRequest failed: {api} {req.error}");
+                }
+
+                return result;
             }
-            else
-            {
-                Log($"Agones SendRequest failed: {api} {req.error}");
-            }
-
-            req.Dispose();
-
-            return result;
         }
 
         private void Log(object message)
